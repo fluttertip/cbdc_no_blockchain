@@ -15,8 +15,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  TextEditingController emailController = TextEditingController();
-  TextEditingController passwordController = TextEditingController();
+  TextEditingController emailController = TextEditingController(
+    text: 'testone@gmail.com',
+  );
+  TextEditingController passwordController = TextEditingController(
+    text: 'testone',
+  );
 
   void _loginuser() async {
     final userProvider = Provider.of<AppProvider>(context, listen: false);
@@ -79,13 +83,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               children: [
                 SizedBox(height: MediaQuery.of(context).padding.top + 80),
-                Container(
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'cbdcprovider',
-                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
-                  ),
-                ),
                 Text(
                   'testemail : testtwo@gmail.com',
                   style: TextStyle(
