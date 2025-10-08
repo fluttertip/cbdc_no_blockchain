@@ -3,8 +3,8 @@ import 'package:cbdcprovider/screens/auth/biometric_auth.dart';
 import 'package:cbdcprovider/screens/transactions/setup_transaction_pin_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
-
 import 'package:provider/provider.dart';
+import 'package:cbdcprovider/screens/auth/login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -14,9 +14,18 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true; //for notificaitons toggle
 
-  void _logout(context) {
+  void _logout(context) async {
     final userprovider = Provider.of<AppProvider>(context, listen: false);
-    userprovider.logout(context);
+    await userprovider.logout(); // provider no longer takes context
+
+    // UI-level navigation after logout
+    if (!mounted) return;
+    PersistentNavBarNavigator.pushNewScreen(
+      context,
+      screen: LoginScreen(),
+      withNavBar: false,
+      pageTransitionAnimation: PageTransitionAnimation.cupertino,
+    );
   }
 
   @override
@@ -31,7 +40,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (context, value, child) => ListView(
           padding: const EdgeInsets.all(20.0),
           children: [
-            // Section: Security
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
@@ -46,8 +54,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ListTile(
               leading: const Icon(Icons.lock),
               title: FutureBuilder<String>(
-                future: Provider.of<AppProvider>(context, listen: false)
-                    .getTransactionPinLabel(),
+                future: Provider.of<AppProvider>(
+                  context,
+                  listen: false,
+                ).getTransactionPinLabel(),
                 builder: (context, snapshot) {
                   return Text(snapshot.data ?? "Setup Transaction PIN");
                 },
@@ -59,31 +69,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 pageTransitionAnimation: PageTransitionAnimation.cupertino,
               ),
             ),
-
             ListTile(
               leading: const Icon(Icons.fingerprint),
               title: FutureBuilder(
-                future: Provider.of<AppProvider>(context, listen: false)
-                    .getBiometricLabel(),
+                future: Provider.of<AppProvider>(
+                  context,
+                  listen: false,
+                ).getBiometricLabel(),
                 builder: (context, snapshot) {
                   return Text(
-                      snapshot.data ?? "Enable Biometric Authentication");
+                    snapshot.data ?? "Enable Biometric Authentication",
+                  );
                 },
               ),
               onTap: () async {
                 Biometricauth().handleBiometricAction(
                   context: context,
-                  isForSetup: true, // this is for enabling/disabling
+                  isForSetup: true,
                   onSuccess: () {
                     setState(() {}); // refresh to show updated label
                   },
                 );
               },
             ),
-
             const Divider(height: 30),
-
-            // Section: Preferences
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
@@ -95,7 +104,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-            // Inside the Preferences section ListView
             ListTile(
               title: Text("Enable Notifications"),
               trailing: Switch(
@@ -103,15 +111,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (bool value) {
                   setState(() {
                     _notificationsEnabled = value;
-                    // Optionally, save to SharedPreferences if you want to persist the setting
                   });
                 },
               ),
             ),
-
             const Divider(height: 30),
-
-            // Section: Support
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
@@ -126,21 +130,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ListTile(
               leading: const Icon(Icons.help),
               title: const Text("Help & Support"),
-              onTap: () {
-                // Navigate to Help & Support Screen
-              },
+              onTap: () {},
             ),
             ListTile(
               leading: const Icon(Icons.info),
               title: const Text("About"),
-              onTap: () {
-                // Navigate to About Screen (app version, etc.)
-              },
+              onTap: () {},
             ),
-
             const Divider(height: 30),
-
-            // Section: Session
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Text(
@@ -160,8 +157,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               onTap: () => _logout(context),
             ),
-
-            
           ],
         ),
       ),

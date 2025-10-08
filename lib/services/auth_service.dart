@@ -1,47 +1,3 @@
-// import 'package:cbdcprovider/model/user_model.dart';
-// import '../utils/http_client.dart';
-
-// class AuthService {
-//   static const String tokenKey = 'auth_token';
-//   static const String userKey = 'user_data';
-
-//   // Login user
-//   Future<Map<String, dynamic>> login(String email, String password) async {
-//     final response = await HttpClient.post('/user/login', {
-//       'email': email,
-//       'password': password,
-//     });
-
-//     if (response['success']) {
-//       final userData = response['data']['user'];
-//       return {'success': true, 'user': User.fromJson(userData)};
-//     } else {
-//       return {'success': false, 'message': response['message']};
-//     }
-//   }
-
-//   // Register user
-//   Future<Map<String, dynamic>> register(
-//     String name,
-//     String email,
-//     String password,
-//     String phone,
-//   ) async {
-//     final response = await HttpClient.post('/user/register', {
-//       'name': name,
-//       'email': email,
-//       'password': password,
-//       'phone': phone,
-//     });
-
-//     if (response['success']) {
-//       final userData = response['data']['user'];
-//       return {'success': true, 'user': User.fromJson(userData)};
-//     } else {
-//       return {'success': false, 'message': response['message']};
-//     }
-//   }
-// }
 import '../utils/http_client.dart';
 
 class AuthService {
@@ -86,4 +42,3 @@ class AuthService {
     }
   }
 }
-// ...existing code...

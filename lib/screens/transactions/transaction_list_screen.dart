@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
 import 'package:provider/provider.dart';
 
-// ...existing imports...
-
 class RecentTranscation extends StatefulWidget {
   const RecentTranscation({super.key});
 
@@ -20,7 +18,7 @@ class _RecentTranscationState extends State<RecentTranscation> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = Provider.of<AppProvider>(context, listen: false);
-      await provider.fetchAllUsers(); // Fetch userId-name map
+      // fetchAllUsers removed from provider; only fetch transactions
       await provider.fetchTransactions();
     });
   }
@@ -32,7 +30,6 @@ class _RecentTranscationState extends State<RecentTranscation> {
         final transactions = userProvider.transactions;
         final isLoading = userProvider.isrecenttranscationloading;
         final currentWalletId = userProvider.walletuserid;
-        final userIdNameMap = userProvider.userIdNameMap;
 
         if (isLoading) {
           return const Center(child: CircularProgressIndicator());
@@ -47,8 +44,19 @@ class _RecentTranscationState extends State<RecentTranscation> {
           itemBuilder: (context, index) {
             final transaction = transactions[index];
 
-            final senderId = transaction.sender;
-            final receiverId = transaction.receiver;
+            // Support both Map and model shapes:
+            final senderId = (transaction is Map)
+                ? (transaction['senderId'] ??
+                      (transaction['sender'] is Map
+                          ? transaction['sender']['_id']
+                          : transaction['sender']))
+                : (transaction.sender ?? '');
+            final receiverId = (transaction is Map)
+                ? (transaction['receiverId'] ??
+                      (transaction['receiver'] is Map
+                          ? transaction['receiver']['_id']
+                          : transaction['receiver']))
+                : (transaction.receiver ?? '');
 
             bool isSender = senderId == currentWalletId;
             bool isReceiver = receiverId == currentWalletId;
@@ -58,44 +66,75 @@ class _RecentTranscationState extends State<RecentTranscation> {
             }
 
             final isCredit = isReceiver;
-            final arrowIcon =
-                isCredit ? Icons.arrow_downward : Icons.arrow_upward;
+            final arrowIcon = isCredit
+                ? Icons.arrow_downward
+                : Icons.arrow_upward;
             final arrowColor = isCredit ? Colors.green : Colors.red;
 
             final otherPartyId = isCredit ? senderId : receiverId;
-            final otherPartyName = userIdNameMap[otherPartyId] ?? otherPartyId;
+            final otherPartyName = (transaction is Map)
+                ? (isCredit
+                      ? (transaction['senderName'] ?? otherPartyId)
+                      : (transaction['receiverName'] ?? otherPartyId))
+                : (isCredit
+                      ? (transaction.senderName ?? otherPartyId)
+                      : (transaction.receiverName ?? otherPartyId));
 
             final title = isCredit
                 ? "fund received from $otherPartyName"
                 : "fund transferred to $otherPartyName";
 
+            final amountValue = (transaction is Map)
+                ? (transaction['amount'] ?? 0)
+                : (transaction.amount ?? 0);
             final amountPrefix = isCredit ? "+" : "-";
-            final amount = "$amountPrefix Rs ${transaction.amount}";
+            final amount = "$amountPrefix Rs $amountValue";
 
             return GestureDetector(
               onTap: () {
+                final txMap = (transaction is Map)
+                    ? {
+                        'senderId': senderId,
+                        'receiverId': receiverId,
+                        'senderName': (transaction['senderName'] ?? senderId),
+                        'receiverName':
+                            (transaction['receiverName'] ?? receiverId),
+                        'amount': amountValue,
+                        'status':
+                            transaction['status'] ??
+                            transaction['transactionStatus'],
+                        'transactionType':
+                            transaction['transactionType'] ??
+                            transaction['type'],
+                        'description': transaction['description'] ?? '',
+                        'createdAt':
+                            (transaction['createdAt'] ??
+                            DateTime.now().toIso8601String()),
+                      }
+                    : {
+                        'senderId': senderId,
+                        'receiverId': receiverId,
+                        'senderName': transaction.senderName ?? senderId,
+                        'receiverName': transaction.receiverName ?? receiverId,
+                        'amount': amountValue,
+                        'status': transaction.status,
+                        'transactionType': transaction.transactionType,
+                        'description': transaction.description,
+                        'createdAt': transaction.createdAt.toIso8601String(),
+                      };
+
                 PersistentNavBarNavigator.pushNewScreen(
                   context,
-                  screen: TransactionDetail(transaction: {
-                    'senderId': transaction.sender,
-                    'receiverId': transaction.receiver,
-                    'senderName':
-                        userIdNameMap[transaction.sender] ?? transaction.sender,
-                    'receiverName': userIdNameMap[transaction.receiver] ??
-                        transaction.receiver,
-                    'amount': transaction.amount,
-                    'status': transaction.status,
-                    'transactionType': transaction.transactionType,
-                    'description': transaction.description,
-                    'createdAt': transaction.createdAt.toIso8601String(),
-                  }),
+                  screen: TransactionDetail(transaction: txMap),
                   withNavBar: false,
                   pageTransitionAnimation: PageTransitionAnimation.cupertino,
                 );
               },
               child: TransactionCard(
                 title: title,
-                subtitle: transaction.status,
+                subtitle: (transaction is Map)
+                    ? (transaction['status'] ?? '')
+                    : (transaction.status ?? ''),
                 amount: amount,
                 isCredit: isCredit,
                 arrowIcon: arrowIcon,

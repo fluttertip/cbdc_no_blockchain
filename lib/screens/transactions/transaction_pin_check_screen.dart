@@ -10,12 +10,13 @@ class TransactionPin extends StatefulWidget {
   final String TranscationType;
   final String Remarks;
 
-  TransactionPin(
-      {super.key,
-      required this.receiverId,
-      required this.amount,
-      required this.TranscationType,
-      required this.Remarks});
+  TransactionPin({
+    super.key,
+    required this.receiverId,
+    required this.amount,
+    required this.TranscationType,
+    required this.Remarks,
+  });
 
   @override
   State<TransactionPin> createState() => _TransactionPinState();
@@ -32,12 +33,10 @@ class _TransactionPinState extends State<TransactionPin> {
   }
 
   Future<void> _initializeBiometric() async {
-    // Use UserProvider to get biometric status
     final userProvider = Provider.of<AppProvider>(context, listen: false);
     await userProvider.loadBiometricPreference();
     await userProvider.loadtranscationpin();
 
-    // Trigger biometric authentication if enabled
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (userProvider.isbiometricenabled && !_hasShownBiometricPopup) {
         _hasShownBiometricPopup = true;
@@ -49,29 +48,33 @@ class _TransactionPinState extends State<TransactionPin> {
   Future<void> _authenticateAndSend(AppProvider userProvider) async {
     await Biometricauth().handleBiometricAction(
       context: context,
-      isForSetup: false, // Not enabling/disabling, just authenticating
+      isForSetup: false,
       onSuccess: () {
         String? savedPin = userProvider.transactionPin;
         if (savedPin != null && savedPin.length == 4) {
           _sendWithPin(savedPin);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Saved PIN not found.")),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Saved PIN not found.")),
+            );
+          }
         }
       },
       onFailure: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Authentication cancelled")),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Authentication cancelled")),
+          );
+        }
       },
     );
   }
 
   void _sendWithPin(String pin) {
     final userProvider = Provider.of<AppProvider>(context, listen: false);
+    // provider API expects no BuildContext - call with correct params
     userProvider.sendMoney(
-      context,
       widget.receiverId,
       widget.amount,
       pin,
@@ -96,8 +99,9 @@ class _TransactionPinState extends State<TransactionPin> {
         automaticallyImplyLeading: false,
         title: const Text("Enter Transaction PIN"),
         backgroundColor: isDarkMode ? Colors.black : Colors.white,
-        iconTheme:
-            IconThemeData(color: isDarkMode ? Colors.white : Colors.black),
+        iconTheme: IconThemeData(
+          color: isDarkMode ? Colors.white : Colors.black,
+        ),
         elevation: 0,
       ),
       body: Padding(
@@ -133,7 +137,8 @@ class _TransactionPinState extends State<TransactionPin> {
                   color: isDarkMode ? Colors.grey[900] : Colors.grey[300],
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: isDarkMode ? Colors.white : Colors.black),
+                    color: isDarkMode ? Colors.white : Colors.black,
+                  ),
                 ),
               ),
             ),
@@ -165,9 +170,10 @@ class _TransactionPinState extends State<TransactionPin> {
                     const SizedBox(height: 10),
                     GestureDetector(
                       onTap: () async {
-                        print("calling fingerprint");
-                        final userProvider =
-                            Provider.of<AppProvider>(context, listen: false);
+                        final userProvider = Provider.of<AppProvider>(
+                          context,
+                          listen: false,
+                        );
                         await _authenticateAndSend(userProvider);
                       },
                       child: Row(

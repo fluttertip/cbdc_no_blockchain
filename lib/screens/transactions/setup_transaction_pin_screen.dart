@@ -1,3 +1,4 @@
+
 import 'package:cbdcprovider/provider/app_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -13,11 +14,24 @@ class _SetupTransactionPinState extends State<SetupTransactionPin> {
   final TextEditingController _pinController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  void _submitPin() {
-    if (_formKey.currentState!.validate()) {
-      final userProvider = Provider.of<AppProvider>(context, listen: false);
-      userProvider.setupTransactionPin(context, _pinController.text);
-    }
+  Future<void> _submitPin() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final userProvider = Provider.of<AppProvider>(context, listen: false);
+    await userProvider.setupTransactionPin(_pinController.text);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Transaction PIN saved")));
+
+    Navigator.of(context).pop();
+  }
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    super.dispose();
   }
 
   @override
@@ -25,7 +39,8 @@ class _SetupTransactionPinState extends State<SetupTransactionPin> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text("Set Transaction PIN")),
+        title: const Text("Set Transaction PIN"),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Form(

@@ -1,3 +1,4 @@
+
 import 'dart:io';
 import 'package:cbdcprovider/provider/app_provider.dart';
 import 'package:flutter/material.dart';
@@ -32,19 +33,38 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
   }
 
   void _submitKyc() async {
+    if (_profileImage == null || _idCardImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please select both images before submitting"),
+        ),
+      );
+      return;
+    }
+
     final userprovider = Provider.of<AppProvider>(context, listen: false);
+
+    // provider.submitKYC expects (dob, idNumber, profileImage, idCardImage)
     await userprovider.submitKYC(
-      context,
       _dobController.text,
       _idNumberController.text,
-      _profileImage as XFile,
-      _idCardImage as XFile,
+      _profileImage!,
+      _idCardImage!,
     );
 
-    // TODO: Implement backend submission logic
+    // UI-level feedback/navigation handled here
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("KYC Submitted Successfully!")),
     );
+
+    // Optionally navigate to main screen (uncomment if desired)
+    // PersistentNavBarNavigator.pushNewScreen(
+    //   context,
+    //   screen: MainNavigation(),
+    //   withNavBar: true,
+    //   pageTransitionAnimation: PageTransitionAnimation.cupertino,
+    // );
   }
 
   @override
@@ -61,9 +81,10 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profile Picture Upload
-              const Text("Upload Profile Picture",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                "Upload Profile Picture",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
               GestureDetector(
                 onTap: () => _pickImage(true),
@@ -79,21 +100,18 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Full Name Input
-
-              // Date of Birth Input
               _buildTextField(
-                  _dobController, "Date of Birth", Icons.calendar_today),
+                _dobController,
+                "Date of Birth",
+                Icons.calendar_today,
+              ),
               const SizedBox(height: 15),
-
-              // ID Number Input
               _buildTextField(_idNumberController, "ID Number", Icons.badge),
               const SizedBox(height: 20),
-
-              // ID Card Upload
-              const Text("Upload Government ID",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                "Upload Government ID",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
               GestureDetector(
                 onTap: () => _pickImage(false),
@@ -106,7 +124,8 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                     image: _idCardImage != null
                         ? DecorationImage(
                             image: FileImage(File(_idCardImage!.path)),
-                            fit: BoxFit.cover)
+                            fit: BoxFit.cover,
+                          )
                         : null,
                   ),
                   child: _idCardImage == null
@@ -115,8 +134,6 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                 ),
               ),
               const SizedBox(height: 30),
-
-              // Submit Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -132,7 +149,10 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
   }
 
   Widget _buildTextField(
-      TextEditingController controller, String hint, IconData icon) {
+    TextEditingController controller,
+    String hint,
+    IconData icon,
+  ) {
     return TextField(
       controller: controller,
       decoration: InputDecoration(
