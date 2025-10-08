@@ -72,21 +72,45 @@ class UserService {
     }
   }
 
-  // Set / update transaction PIN (backend expects userId + transactionPin)
   Future<Map<String, dynamic>> setTransactionPin(
     String userId,
     String pin, {
     String? token,
   }) async {
-    final response = await HttpClient.post('/user/setpin', {
-      'userId': userId,
-      'transactionPin': pin,
-    }, token: token);
+    try {
+      // Try primary GET endpoint (as docs)
+      // final endpoint1 =
+      //     '/user/setPin?userId=${Uri.encodeComponent(userId)}&transactionPin=${Uri.encodeComponent(pin)}';
+      // var response = await HttpClient.get(endpoint1, token: token);
 
-    if (response['success'] == true) {
-      return {'success': true, 'data': response['data']};
-    } else {
-      return {'success': false, 'message': response['message']};
+      // if (response['success'] == true) {
+      //   return {'success': true, 'data': response['data']};
+      // }
+
+      // // If not found / route does not exist, try lowercase variant
+      // final endpoint2 =
+      //     '/user/setpin?userId=${Uri.encodeComponent(userId)}&transactionPin=${Uri.encodeComponent(pin)}';
+      // response = await HttpClient.get(endpoint2, token: token);
+      // if (response['success'] == true) {
+      //   return {'success': true, 'data': response['data']};
+      // }
+
+      // Final fallback: try POST (some deployments use POST)
+      final response = await HttpClient.post('/user/setpin', {
+        'userId': userId,
+        'transactionPin': pin,
+      }, token: token);
+      if (response['success'] == true) {
+        return {'success': true, 'data': response['data']};
+      }
+
+      // No success from any attempt
+      return {
+        'success': false,
+        'message': response['message'] ?? 'Failed to set PIN on server',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
     }
   }
 

@@ -227,11 +227,10 @@ class _sendmoneyremarksscreenState extends State<sendmoneyremarksscreen> {
                   onPressed: () {
                     PersistentNavBarNavigator.pushNewScreen(
                       context,
-                      screen: TransactionPin(
+                      screen: TransactionPinCheck(
                         receiverId: widget.receiverId,
                         amount: widget.amount,
                         Remarks: remarksController.text,
-                        TranscationType: selectedPurpose,
                       ),
                       withNavBar: false,
                       pageTransitionAnimation:

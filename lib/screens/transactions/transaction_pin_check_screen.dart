@@ -3,26 +3,26 @@ import 'package:cbdcprovider/screens/auth/biometric_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pinput/pinput.dart';
+import 'package:persistent_bottom_nav_bar/persistent_bottom_nav_bar.dart';
+import 'package:cbdcprovider/screens/main_navigation.dart';
 
-class TransactionPin extends StatefulWidget {
+class TransactionPinCheck extends StatefulWidget {
   final String receiverId;
   final double amount;
-  final String TranscationType;
   final String Remarks;
 
-  TransactionPin({
+  TransactionPinCheck({
     super.key,
     required this.receiverId,
     required this.amount,
-    required this.TranscationType,
     required this.Remarks,
   });
 
   @override
-  State<TransactionPin> createState() => _TransactionPinState();
+  State<TransactionPinCheck> createState() => _TransactionPinState();
 }
 
-class _TransactionPinState extends State<TransactionPin> {
+class _TransactionPinState extends State<TransactionPinCheck> {
   final TextEditingController _pinController = TextEditingController();
   bool _hasShownBiometricPopup = false;
 
@@ -71,16 +71,37 @@ class _TransactionPinState extends State<TransactionPin> {
     );
   }
 
-  void _sendWithPin(String pin) {
+  void _sendWithPin(String pin) async {
     final userProvider = Provider.of<AppProvider>(context, listen: false);
-    // provider API expects no BuildContext - call with correct params
-    userProvider.sendMoney(
+
+    final result = await userProvider.sendMoney(
       widget.receiverId,
       widget.amount,
       pin,
-      widget.TranscationType,
       widget.Remarks,
     );
+
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      // success: show message and navigate to main navigation
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Transaction successful")));
+
+      // Replace stack with main navigation
+      PersistentNavBarNavigator.pushNewScreen(
+        context,
+        screen: MainNavigation(),
+        withNavBar: true,
+        pageTransitionAnimation: PageTransitionAnimation.cupertino,
+      );
+    } else {
+      final msg = result['message'] ?? 'Transaction failed';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $msg")));
+    }
   }
 
   @override

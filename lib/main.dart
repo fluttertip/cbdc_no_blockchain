@@ -15,14 +15,14 @@ class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
   //APK DOWNLOAD LINK
-  static const String apkDownloadUrl = 'YOUR_APK_DOWNLOAD_LINK_HERE';
+  // static const String apkDownloadUrl = 'YOUR_APK_DOWNLOAD_LINK_HERE';
 
-  Future<void> _downloadAPK() async {
-    final Uri url = Uri.parse(apkDownloadUrl);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
-  }
+  // Future<void> _downloadAPK() async {
+  //   final Uri url = Uri.parse(apkDownloadUrl);
+  //   if (await canLaunchUrl(url)) {
+  //     await launchUrl(url, mode: LaunchMode.externalApplication);
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -73,14 +73,14 @@ class MyApp extends StatelessWidget {
                           Row(
                             children: [
                               //Download APK Button
-                              Expanded(
-                                flex: 1,
-                                child: Center(
-                                  child: _DownloadButton(
-                                    onPressed: () => _downloadAPK(),
-                                  ),
-                                ),
-                              ),
+                              // Expanded(
+                              //   flex: 1,
+                              //   child: Center(
+                              //     child: _DownloadButton(
+                              //       onPressed: () => _downloadAPK(),
+                              //     ),
+                              //   ),
+                              // ),
 
                               // Center - Phone mockup
                               Expanded(
@@ -193,7 +193,7 @@ class _InfoMessage extends StatelessWidget {
           Icon(Icons.info_outline_rounded, color: Color(0xFF667EEA), size: 48),
           SizedBox(height: 16),
           Text(
-            'Zoom out your browser',
+            'Zoom out your browser-67%',
             style: TextStyle(
               color: Colors.white,
               fontSize: 20,
@@ -206,9 +206,8 @@ class _InfoMessage extends StatelessWidget {
           Text(
             'All features may not work properly on the web version.',
             style: TextStyle(
-              color: Colors.white60,
-              fontSize: 13,
-              fontStyle: FontStyle.italic,
+              color: Colors.white,
+              fontSize: 14,
             ),
             textAlign: TextAlign.center,
           ),

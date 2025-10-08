@@ -1,4 +1,3 @@
-
 import 'package:cbdcprovider/provider/app_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -18,14 +17,20 @@ class _SetupTransactionPinState extends State<SetupTransactionPin> {
     if (!_formKey.currentState!.validate()) return;
 
     final userProvider = Provider.of<AppProvider>(context, listen: false);
-    await userProvider.setupTransactionPin(_pinController.text);
+    final result = await userProvider.setupTransactionPin(_pinController.text);
 
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Transaction PIN saved")));
-
-    Navigator.of(context).pop();
+    if (result['success'] == true) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Transaction PIN saved")));
+      Navigator.of(context).pop();
+    } else {
+      final msg = result['message'] ?? 'Failed to set PIN';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error: $msg")));
+    }
   }
 
   @override

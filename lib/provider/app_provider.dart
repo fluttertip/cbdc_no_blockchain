@@ -17,8 +17,12 @@ class AppProvider with ChangeNotifier {
   final UserService _userService = UserService();
   final TransactionService _transactionService = TransactionService();
 
+  //vercel
+  // static const String baseUrl =
+  //     "https://cbdc-test-backend-test-code.vercel.app/api/v1";
+  //render
   static const String baseUrl =
-      "https://cbdc-test-backend-test-code.vercel.app/api/v1";
+      "https://cbdc-test-backend-test-code.onrender.com/api/v1";
 
   //
   // Variables
@@ -103,26 +107,28 @@ class AppProvider with ChangeNotifier {
   }
 
   Future<String> getTransactionPinLabel() async {
-    final prefs = await SharedPreferences.getInstance();
-    final pin = prefs.getString('transaction_pin');
-    return (pin == null || transactionpin_backend == false)
+    return (_transactionPin == null || _transactionpin_backend == false)
         ? "Setup Transaction PIN"
         : "Change Transaction PIN";
   }
 
   // Set transaction PIN
   Future<void> setTransactionPin(String pin) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('transaction_pin', pin);
     _transactionPin = pin;
+    _transactionpin_backend = true;
     notifyListeners();
   }
 
   // Get the stored transaction pin
   Future<void> loadtranscationpin() async {
-    final prefs = await SharedPreferences.getInstance();
-    _transactionPin = prefs.getString('transaction_pin');
-    notifyListeners();
+    if (_transactionPin != null) return;
+    if (_walletuserid.isNotEmpty) {
+      try {
+        await fetchUserInfo(); // fetch will update _transactionpin_backend if backend has PIN
+      } catch (_) {
+        // ignore
+      }
+    }
   }
 
   // Toggle show balance
@@ -264,12 +270,12 @@ class AppProvider with ChangeNotifier {
     }
   }
 
-  // Function to set transaction PIN
-  Future<void> setupTransactionPin(
-    // BuildContext context,
+  Future<Map<String, dynamic>> setupTransactionPin(
     String transactionPin,
   ) async {
-    if (_walletuserid.isEmpty) return;
+    if (_walletuserid.isEmpty) {
+      return {'success': false, 'message': 'User not logged in'};
+    }
 
     try {
       final result = await _userService.setTransactionPin(
@@ -281,32 +287,17 @@ class AppProvider with ChangeNotifier {
       print("Set PIN API Response: $result");
 
       if (result['success'] == true) {
-        // Save pin locally
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('transaction_pin', transactionPin);
+        // Update provider state in-memory only
         _transactionPin = transactionPin;
         _transactionpin_backend = true;
-
-        // Navigator.pushAndRemoveUntil(
-        //   context,
-        //   MaterialPageRoute(builder: (context) => MainNavigation()),
-        //   (route) => false,
-        // );
-
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   const SnackBar(content: Text("Transaction PIN set successfully!")),
-        // );
+        notifyListeners();
+        return {'success': true};
       } else {
-        print("Failed to set PIN: ${result['message']}");
-        //   ScaffoldMessenger.of(
-        //     context,
-        //   ).showSnackBar(SnackBar(content: Text("Error: ${result['message']}")));
+        return {'success': false, 'message': result['message'] ?? 'Failed'};
       }
     } catch (e) {
       print("Exception while setting PIN: $e");
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   const SnackBar(content: Text("Network error. Please try again.")),
-      // );
+      return {'success': false, 'message': e.toString()};
     }
   }
 
@@ -427,6 +418,7 @@ class AppProvider with ChangeNotifier {
     _kycStatus = data['kycStatus'] ?? "Pending";
     _dob = data['dateOfBirth'] ?? "";
     _citizenidno = data['governmentIdNumber'] ?? "";
+    _transactionPin = data['transactionPin'] ?? null;
 
     // Check if transaction pin exists in backend
     if (data['transactionPin'] != null &&
@@ -447,23 +439,22 @@ class AppProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> sendMoney(
-    // BuildContext context,
+  Future<Map<String, dynamic>> sendMoney(
     String receiverId,
     double amount,
     String pin,
-    String TranscationType,
     String Remarks,
   ) async {
     print("Send money called with pin: $pin");
-    if (_walletuserid.isEmpty) return;
 
-    // if (_isTransactionInProgress) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(content: Text("A transaction is already in progress")),
-    //   );
-    //   return;
-    // }
+    if (_walletuserid.isEmpty) {
+      return {'success': false, 'message': 'User not logged in'};
+    }
+
+    if (pin.trim().isEmpty) {
+      print("sendMoney aborted: missing transaction PIN");
+      return {'success': false, 'message': 'Transaction PIN required'};
+    }
 
     _isTransactionInProgress = true;
     notifyListeners();
@@ -473,8 +464,9 @@ class AppProvider with ChangeNotifier {
         senderId: _walletuserid,
         receiverId: receiverId,
         amount: amount,
-        transactionType: TranscationType.isEmpty ? "transfer" : TranscationType,
+        transactionType: "transfer",
         description: Remarks,
+        transactionPin: pin,
         token: _token,
       );
 
@@ -482,39 +474,24 @@ class AppProvider with ChangeNotifier {
 
       if (result['success'] == true) {
         await getBalance();
-
-        // if (context.mounted) {
-        //   Navigator.pushAndRemoveUntil(
-        //     context,
-        //     MaterialPageRoute(builder: (context) => MainNavigation()),
-        //     (route) => false,
-        //   );
-
-        //   ScaffoldMessenger.of(context).showSnackBar(
-        //     const SnackBar(content: Text("Transaction Successful")),
-        //   );
-        // }
+        return {'success': true, 'data': result['data']};
       } else {
-        print(result['message'] ?? "Transaction failed");
-        // if (context.mounted) {
-        //   ScaffoldMessenger.of(
-        //     context,
-        //   ).showSnackBar(SnackBar(content: Text(errorMessage)));
-        // }
+        return {
+          'success': false,
+          'message': result['message'] ?? 'Transaction failed',
+        };
       }
     } catch (e) {
       print("Transaction error: $e");
-      // if (context.mounted) {
-      //   ScaffoldMessenger.of(
-      //     context,
-      //   ).showSnackBar(SnackBar(content: Text("Error: $e")));
-      // }
+      return {'success': false, 'message': e.toString()};
     } finally {
       _isTransactionInProgress = false;
       notifyListeners();
     }
   }
 
+  // Get balance
+  // ...existing code...
   // Get balance
   Future<void> getBalance() async {
     print("get balance called");
@@ -527,19 +504,50 @@ class AppProvider with ChangeNotifier {
         token: _token,
       );
 
+      // Accept multiple response shapes and extract numeric balance safely
       if (result['success'] == true) {
-        print("User balance fetched successfully: ${result['balance']}");
-        _balance = (result['balance'] ?? 0).toDouble();
+        // result may contain { 'balance': 123 } or { 'data': { 'balance': 123 } } or { 'balance': { 'balance': 123 } }
+        dynamic balanceCandidate;
+        if (result.containsKey('balance')) {
+          balanceCandidate = result['balance'];
+        } else if (result.containsKey('data')) {
+          balanceCandidate = result['data'];
+          if (balanceCandidate is Map &&
+              balanceCandidate.containsKey('balance')) {
+            balanceCandidate = balanceCandidate['balance'];
+          }
+        } else {
+          balanceCandidate = result;
+        }
+
+        // If it's a map containing balance key, extract it
+        if (balanceCandidate is Map &&
+            balanceCandidate.containsKey('balance')) {
+          balanceCandidate = balanceCandidate['balance'];
+        }
+
+        double parsedBalance = 0.0;
+        if (balanceCandidate is num) {
+          parsedBalance = balanceCandidate.toDouble();
+        } else if (balanceCandidate is String) {
+          parsedBalance = double.tryParse(balanceCandidate) ?? 0.0;
+        } else {
+          parsedBalance = 0.0;
+        }
+
+        print("User balance fetched successfully: $balanceCandidate");
+        _balance = parsedBalance;
         notifyListeners();
       } else {
         print("Failed to fetch user balance: ${result['message']}");
         throw Exception("Failed to fetch user balance");
       }
     } catch (e) {
-      print("Error fetching balance: $e");
+      print("Error fetching user balance: $e");
       throw Exception("Failed to fetch user balance");
     }
   }
+  // ...existing code...
 
   // Submit KYC
   Future<void> submitKYC(

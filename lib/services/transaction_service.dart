@@ -6,6 +6,7 @@ class TransactionService {
     required String receiverId,
     required double amount,
     required String transactionType,
+    required String transactionPin,
     String? description,
     String? token,
   }) async {
@@ -15,7 +16,10 @@ class TransactionService {
       'amount': amount,
       'transactionType': transactionType,
       'description': description ?? '',
+      'transactionPin': transactionPin,
     };
+ // Debug: confirm payload contains transactionPin before sending
+    print("createTransaction payload: $payload");
 
     final response = await HttpClient.post(
       '/transactions',
