@@ -5,9 +5,16 @@ import 'provider/theme_provider.dart';
 import 'themes/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+    // Lock app to portrait only
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(const MyApp());
 }
 
