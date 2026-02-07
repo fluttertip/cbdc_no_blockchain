@@ -1,28 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
-import 'package:http_parser/http_parser.dart';
-
-// Import services
-import '../services/auth_service.dart';
-import '../services/user_service.dart';
-import '../services/transaction_service.dart';
+import 'package:crypto/crypto.dart';
 
 class AppProvider with ChangeNotifier {
-  // Services
-  final AuthService _authService = AuthService();
-  final UserService _userService = UserService();
-  final TransactionService _transactionService = TransactionService();
-
-  //vercel
-  // static const String baseUrl =
-  //     "https://cbdc-test-backend-test-code.vercel.app/api/v1";
-  //render
-  static const String baseUrl =
-      "https://cbdc-test-backend-test-code.onrender.com/api/v1";
+  // Firebase instances
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   //
   // Variables
@@ -36,12 +23,11 @@ class AppProvider with ChangeNotifier {
   double _balance = 0.00;
   String _dob = "";
   String _citizenidno = "";
-  String _kycStatus = "Pending";
+  String _kycStatus = "not_submitted";
   bool _isTransactionInProgress = false;
   String? _transactionPin;
   bool _isBiometricEnabled = false;
   bool _transactionpin_backend = false;
-  String? _token;
 
   // UI/loading
   bool _isLoading = false;
@@ -58,10 +44,8 @@ class AppProvider with ChangeNotifier {
   List<dynamic> get transactions => _transactions;
   String get dob => _dob;
   String get citizenidno => _citizenidno;
-  String get baseurl => baseUrl;
   bool get isbiometricenabled => _isBiometricEnabled;
   String get kycStatus => _kycStatus;
-  String? get token => _token;
 
   //ui loading
   void _setLoading(bool v) {
@@ -69,19 +53,40 @@ class AppProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // Helper: Hash PIN using SHA256
+  String _hashPin(String pin) {
+    return sha256.convert(utf8.encode(pin)).toString();
+  }
+
   //
   // Three functions for biometric auth
   //
   Future<void> loadBiometricPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isBiometricEnabled = prefs.getBool('isbiometricenabled') ?? false;
+    // Load from user's Firestore document
+    if (_walletuserid.isEmpty) return;
+    
+    try {
+      final doc = await _firestore.collection('users').doc(_walletuserid).get();
+      if (doc.exists) {
+        _isBiometricEnabled = doc.data()?['isBiometricEnabled'] ?? false;
+      }
+    } catch (e) {
+      print("Error loading biometric preference: $e");
+    }
     notifyListeners();
   }
 
   Future<void> setBiometricEnabled(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isbiometricenabled', value);
-    _isBiometricEnabled = value;
+    if (_walletuserid.isEmpty) return;
+    
+    try {
+      await _firestore.collection('users').doc(_walletuserid).update({
+        'isBiometricEnabled': value,
+      });
+      _isBiometricEnabled = value;
+    } catch (e) {
+      print("Error setting biometric: $e");
+    }
     notifyListeners();
   }
 
@@ -89,11 +94,11 @@ class AppProvider with ChangeNotifier {
   // Function for login screen
   //
   Future<void> checkBiometricLoginAvailable() async {
-    final prefs = await SharedPreferences.getInstance();
-    String walletId = prefs.getString('wallet_id') ?? "";
-    bool biometricEnabled = prefs.getBool('isbiometricenabled') ?? false;
-    _isBiometricEnabled = biometricEnabled;
-    _walletuserid = walletId;
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) return;
+
+    _walletuserid = currentUser.uid;
+    await loadBiometricPreference();
     notifyListeners();
   }
 
@@ -101,9 +106,7 @@ class AppProvider with ChangeNotifier {
   // For setting page
   //
   Future<String> getBiometricLabel() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isBiometricEnabled = prefs.getBool('isbiometricenabled') ?? false;
-    return isBiometricEnabled ? "Disable Biometric" : "Enable Biometric";
+    return _isBiometricEnabled ? "Disable Biometric" : "Enable Biometric";
   }
 
   Future<String> getTransactionPinLabel() async {
@@ -144,72 +147,69 @@ class AppProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Save Wallet ID to SharedPreferences
-  Future<void> _savewalletuserid(String walletuserid) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("wallet_id", walletuserid);
-  }
-
-  // Save token to SharedPreferences
-  Future<void> _saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("auth_token", token);
-  }
-
   // Register User & update Data
   Future<Map<String, dynamic>> registerUser(
-    // BuildContext context,
     String name,
     String email,
     String password,
   ) async {
     _setLoading(true);
-
     print("register user called");
 
     try {
-      final result = await _authService.register(name, email, password, null);
+      // Create Firebase Auth account
+      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-      print("Register result: $result");
+      final uid = userCredential.user!.uid;
+      print("User registered with UID: $uid");
 
-      if (result['success'] == true) {
-        final responseData = result['data'];
-        print("User registered successfully: $responseData");
+      // Create user document in Firestore
+      await _firestore.collection('users').doc(uid).set({
+        'name': name,
+        'email': email,
+        'balance': 0.0,
+        'dateOfBirth': '',
+        'governmentIdNumber': '',
+        'kycStatus': 'not_submitted',
+        'transactionPin': null,
+        'profilePhotoUrl': '',
+        'isBiometricEnabled': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
-        _setDataOfUseronLoginAndSignUp(responseData["user"]);
+      // Create KYC document
+      await _firestore.collection('kyc').doc(uid).set({
+        'profilePhotoUrl': '',
+        'governmentIdImageUrl': '',
+        'status': 'not_submitted',
+        'dateOfBirth': '',
+        'governmentIdNumber': '',
+        'submittedAt': null,
+        'approvedAt': null,
+        'rejectionReason': null,
+      });
 
-        // Save token if available
-        if (responseData["token"] != null) {
-          _token = responseData["token"];
-          await _saveToken(_token!);
-        }
+      _walletuserid = uid;
+      _fullName = name;
+      _email = email;
+      _balance = 0.0;
+      _kycStatus = 'not_submitted';
 
-        await _savewalletuserid(_walletuserid);
-        notifyListeners();
+      notifyListeners();
+      print("User registered successfully with UID: $uid");
 
-        return {'success': true, 'data': responseData};
-
-        // Navigator.pushAndRemoveUntil(
-        //   context,
-        //   MaterialPageRoute(builder: (context) => MainNavigation()),
-        //   (route) => false,
-        // );
-      } else {
-        String errorMessage = result["message"] ?? "Registration failed";
-        print(errorMessage);
-        return {'success': false, 'message': errorMessage};
-
-        // ScaffoldMessenger.of(
-        //   context,
-        // ).showSnackBar(SnackBar(content: Text(errorMessage)));
-      }
+      return {'success': true, 'data': {'user': {'_id': uid, 'name': name, 'email': email, 'balance': 0.0}}};
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = e.message ?? "Registration failed";
+      print("Registration error: $errorMessage");
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       print("Registration error: $e");
       return {'success': false, 'message': e.toString()};
-
-      // ScaffoldMessenger.of(
-      //   context,
-      // ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       _setLoading(false);
     }
@@ -221,50 +221,41 @@ class AppProvider with ChangeNotifier {
     print("login user called");
 
     try {
-      final result = await _authService.login(email, password);
+      final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-      print("Login result: $result");
+      final uid = userCredential.user!.uid;
+      print("User logged in with UID: $uid");
 
-      if (result['success'] == true) {
-        final responseData = result['data'];
-        print("User Logged IN successfully: $responseData");
+      // Fetch user data from Firestore
+      final userDoc = await _firestore.collection('users').doc(uid).get();
 
-        _setDataOfUseronLoginAndSignUp(responseData["user"]);
-
-        // Save token if available
-        if (responseData["token"] != null) {
-          _token = responseData["token"];
-          await _saveToken(_token!);
-        }
-
-        await _savewalletuserid(_walletuserid);
-
-        print("Checking for wallet id: $_walletuserid");
-
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        _setDataOfUseronFirestoreDoc(userData, uid);
         notifyListeners();
-        return {'success': true, 'data': responseData};
 
-        // Navigator.pushAndRemoveUntil(
-        //   context,
-        //   MaterialPageRoute(builder: (context) => MainNavigation()),
-        //   (route) => false,
-        // );
+        return {
+          'success': true,
+          'data': {
+            'user': {'_id': uid, ...userData}
+          }
+        };
       } else {
-        final message = result["message"] ?? "Login failed";
-
-        return {'success': false, 'message': message};
-
-        // ScaffoldMessenger.of(
-        //   context,
-        // ).showSnackBar(SnackBar(content: Text(errorMessage)));
+        return {
+          'success': false,
+          'message': 'User profile not found'
+        };
       }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = e.message ?? "Login failed";
+      print("Login error: $errorMessage");
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       print("Login error: $e");
       return {'success': false, 'message': e.toString()};
-
-      // ScaffoldMessenger.of(
-      //   context,
-      // ).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       _setLoading(false);
     }
@@ -278,23 +269,20 @@ class AppProvider with ChangeNotifier {
     }
 
     try {
-      final result = await _userService.setTransactionPin(
-        _walletuserid,
-        transactionPin,
-        token: _token,
-      );
+      final hashedPin = _hashPin(transactionPin);
 
-      print("Set PIN API Response: $result");
+      await _firestore.collection('users').doc(_walletuserid).update({
+        'transactionPin': hashedPin,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
-      if (result['success'] == true) {
-        // Update provider state in-memory only
-        _transactionPin = transactionPin;
-        _transactionpin_backend = true;
-        notifyListeners();
-        return {'success': true};
-      } else {
-        return {'success': false, 'message': result['message'] ?? 'Failed'};
-      }
+      print("Transaction PIN set successfully");
+
+      _transactionPin = transactionPin;
+      _transactionpin_backend = true;
+      notifyListeners();
+
+      return {'success': true};
     } catch (e) {
       print("Exception while setting PIN: $e");
       return {'success': false, 'message': e.toString()};
@@ -308,23 +296,20 @@ class AppProvider with ChangeNotifier {
     print("fetch user info $_walletuserid");
 
     try {
-      print("try fetch user info $_walletuserid");
+      final userDoc = await _firestore.collection('users').doc(_walletuserid).get();
 
-      final result = await _userService.getShowMe(_walletuserid, token: _token);
-
-      print("fetch user function Response: $result");
-
-      if (result['success'] == true) {
-        final data = result['data'];
-        print("User details fetched successfully: $data");
-        _setDataOfUseronLoginAndSignUp(data["user"]);
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        _setDataOfUseronFirestoreDoc(userData, _walletuserid);
         notifyListeners();
+        print("User details fetched successfully: $userData");
       } else {
-        print("Failed to fetch user info: ${result['message']}");
-        throw Exception("Failed to fetch user info");
+        print("User document not found");
+        throw Exception("User profile not found");
       }
     } catch (error) {
       print("Error fetching user info: $error");
+      rethrow;
     }
   }
 
@@ -338,33 +323,42 @@ class AppProvider with ChangeNotifier {
     print("fetch transactions called");
 
     try {
-      final result = await _transactionService.getTransactionsForUser(
-        _walletuserid,
-        token: _token,
-      );
+      // Query transactions where user is sender or receiver
+      final QuerySnapshot sentSnapshot = await _firestore
+          .collection('transactions')
+          .where('senderId', isEqualTo: _walletuserid)
+          .orderBy('timestamp', descending: true)
+          .get();
 
-      if (result['success'] == true) {
-        print("fetchTransaction response incoming:");
-        print(result['data']);
+      final QuerySnapshot receivedSnapshot = await _firestore
+          .collection('transactions')
+          .where('receiverId', isEqualTo: _walletuserid)
+          .orderBy('timestamp', descending: true)
+          .get();
 
-        List<dynamic> transactions = result['data']['transactions'];
+      // Combine and sort transactions
+      final allTransactions = [
+        ...sentSnapshot.docs.map((doc) => doc.data() as Map<String, dynamic>),
+        ...receivedSnapshot.docs.map((doc) => doc.data() as Map<String, dynamic>),
+      ];
 
-        // Old implementation for showcase
-        _transactions = transactions.map((transaction) {
-          bool isCredit = transaction['receiver']['_id'] == _walletuserid;
-          return {
-            ...transaction,
-            'isCredit': isCredit,
-            'senderId': transaction['sender']['_id'],
-            'receiverId': transaction['receiver']['_id'],
-            'senderName': transaction['sender']['name'],
-            'receiverName': transaction['receiver']['name'],
-          };
-        }).toList();
-      } else {
-        _transactions = [];
-        print("Failed to fetch transactions: ${result['message']}");
-      }
+      // Sort by timestamp descending
+      allTransactions.sort((a, b) {
+        final aTime = (a['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
+        final bTime = (b['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
+        return bTime.compareTo(aTime);
+      });
+
+      _transactions = allTransactions.map((transaction) {
+        bool isCredit = transaction['receiverId'] == _walletuserid;
+        return {
+          ...transaction,
+          'isCredit': isCredit,
+          'timestamp': (transaction['timestamp'] as Timestamp?)?.toDate(),
+        };
+      }).toList();
+
+      print("Transactions fetched: ${_transactions.length}");
     } catch (e) {
       _transactions = [];
       print("Error fetching transactions: $e");
@@ -379,62 +373,66 @@ class AppProvider with ChangeNotifier {
     if (_walletuserid.isEmpty) return;
 
     try {
-      final result = await _transactionService.getTransactionsForUser(
-        _walletuserid,
-        token: _token,
-      );
+      final QuerySnapshot sentSnapshot = await _firestore
+          .collection('transactions')
+          .where('senderId', isEqualTo: _walletuserid)
+          .orderBy('timestamp', descending: true)
+          .get();
 
-      if (result['success'] == true) {
-        _transactions = result['data']['transactions'];
-        print("User transaction successfully: $_transactions");
-        notifyListeners();
-      } else {
-        throw Exception("Failed to fetch transactions");
-      }
+      final QuerySnapshot receivedSnapshot = await _firestore
+          .collection('transactions')
+          .where('receiverId', isEqualTo: _walletuserid)
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      final allTransactions = [
+        ...sentSnapshot.docs,
+        ...receivedSnapshot.docs,
+      ];
+
+      _transactions = allTransactions.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          ...data,
+          'isCredit': data['receiverId'] == _walletuserid,
+          'timestamp': (data['timestamp'] as Timestamp?)?.toDate(),
+        };
+      }).toList();
+
+      print("User transactions fetched successfully: ${_transactions.length}");
+      notifyListeners();
     } catch (e) {
       print("Error fetching individual transactions: $e");
       throw Exception("Failed to fetch transactions");
     }
   }
 
-  void _setDataOfUseronLoginAndSignUp(Map<String, dynamic> data) {
-    if (_walletuserid.isEmpty) {
-      _walletuserid = data['_id'] ?? data['id'] ?? "";
-    }
-
-    if (_fullName.isEmpty) {
-      _fullName = data['name'] ?? "";
-    }
-
-    if (_balance == 0.00) {
-      _balance = (data['balance'] ?? 0).toDouble();
-    }
-
-    if (_email.isEmpty) {
-      _email = data['email'] ?? "";
-    }
-
-    _balance = (data['balance'] ?? 0).toDouble();
-    _kycStatus = data['kycStatus'] ?? "Pending";
+  void _setDataOfUseronFirestoreDoc(Map<String, dynamic> data, String uid) {
+    _walletuserid = uid;
+    _fullName = data['name'] ?? "";
+    _email = data['email'] ?? "";
+    _balance = (data['balance'] ?? 0.0).toDouble();
+    _kycStatus = data['kycStatus'] ?? "not_submitted";
     _dob = data['dateOfBirth'] ?? "";
     _citizenidno = data['governmentIdNumber'] ?? "";
-    _transactionPin = data['transactionPin'] ?? null;
 
     // Check if transaction pin exists in backend
     if (data['transactionPin'] != null &&
         data['transactionPin'].toString().isNotEmpty) {
       _transactionpin_backend = true;
+      _transactionPin = null; // Never store plaintext PIN in memory
+    } else {
+      _transactionpin_backend = false;
+      _transactionPin = null;
     }
-
-    print("kyc status: $_kycStatus");
-    print("dob: $_dob");
-    print("citizenidno: $_citizenidno");
 
     print("Updated User Info:");
     print("Full Name: $_fullName");
     print("Wallet User ID: $_walletuserid");
     print("Balance: $_balance");
     print("Email: $_email");
+    print("KYC Status: $_kycStatus");
+    print("Transaction PIN Backend: $_transactionpin_backend");
 
     notifyListeners();
   }
@@ -443,9 +441,9 @@ class AppProvider with ChangeNotifier {
     String receiverId,
     double amount,
     String pin,
-    String Remarks,
+    String remarks,
   ) async {
-    print("Send money called with pin: $pin");
+    print("Send money called with receiverId: $receiverId, amount: $amount");
 
     if (_walletuserid.isEmpty) {
       return {'success': false, 'message': 'User not logged in'};
@@ -456,31 +454,94 @@ class AppProvider with ChangeNotifier {
       return {'success': false, 'message': 'Transaction PIN required'};
     }
 
+    if (amount <= 0) {
+      return {'success': false, 'message': 'Amount must be greater than zero'};
+    }
+
     _isTransactionInProgress = true;
     notifyListeners();
 
     try {
-      final result = await _transactionService.createTransaction(
-        senderId: _walletuserid,
-        receiverId: receiverId,
-        amount: amount,
-        transactionType: "transfer",
-        description: Remarks,
-        transactionPin: pin,
-        token: _token,
-      );
+      // Hash the provided PIN
+      final hashedProvidedPin = _hashPin(pin);
 
-      print("Transaction result: $result");
+      // Execute atomic Firestore transaction
+      final result = await _firestore.runTransaction((transaction) async {
+        // Read sender document
+        final senderRef = _firestore.collection('users').doc(_walletuserid);
+        final senderSnapshot = await transaction.get(senderRef);
 
-      if (result['success'] == true) {
-        await getBalance();
-        return {'success': true, 'data': result['data']};
-      } else {
-        return {
-          'success': false,
-          'message': result['message'] ?? 'Transaction failed',
-        };
-      }
+        if (!senderSnapshot.exists) {
+          throw Exception('Sender account not found');
+        }
+
+        final senderData = senderSnapshot.data() as Map<String, dynamic>;
+        final senderBalance = (senderData['balance'] ?? 0.0).toDouble();
+        final storedHashedPin = senderData['transactionPin'];
+
+        // Verify PIN
+        if (storedHashedPin == null || storedHashedPin != hashedProvidedPin) {
+          throw Exception('Invalid transaction PIN');
+        }
+
+        // Check sufficient balance
+        if (senderBalance < amount) {
+          throw Exception('Insufficient balance');
+        }
+
+        // Read receiver document
+        final receiverRef = _firestore.collection('users').doc(receiverId);
+        final receiverSnapshot = await transaction.get(receiverRef);
+
+        if (!receiverSnapshot.exists) {
+          throw Exception('Receiver account not found');
+        }
+
+        final receiverData = receiverSnapshot.data() as Map<String, dynamic>;
+        final receiverBalance = (receiverData['balance'] ?? 0.0).toDouble();
+
+        // Update sender balance
+        transaction.update(senderRef, {
+          'balance': senderBalance - amount,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Update receiver balance
+        transaction.update(receiverRef, {
+          'balance': receiverBalance + amount,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Create transaction record
+        final transactionRef = _firestore.collection('transactions').doc();
+        transaction.set(transactionRef, {
+          'senderId': _walletuserid,
+          'senderName': _fullName,
+          'receiverId': receiverId,
+          'receiverName': receiverData['name'] ?? 'Unknown',
+          'amount': amount,
+          'transactionType': 'transfer',
+          'description': remarks,
+          'status': 'completed',
+          'timestamp': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        return transactionRef.id;
+      });
+
+      // Update local state
+      _balance = _balance - amount;
+      notifyListeners();
+
+      print("Transaction completed successfully: $result");
+      return {
+        'success': true,
+        'data': {'transactionId': result, 'amount': amount}
+      };
+    } on FirebaseException catch (e) {
+      print("Firestore exception: ${e.message}");
+      return {'success': false, 'message': e.message ?? 'Transaction failed'};
     } catch (e) {
       print("Transaction error: $e");
       return {'success': false, 'message': e.toString()};
@@ -491,158 +552,92 @@ class AppProvider with ChangeNotifier {
   }
 
   // Get balance
-  // ...existing code...
-  // Get balance
   Future<void> getBalance() async {
     print("get balance called");
 
     if (_walletuserid.isEmpty) return;
 
     try {
-      final result = await _userService.getUserBalance(
-        _walletuserid,
-        token: _token,
-      );
+      final userDoc = await _firestore.collection('users').doc(_walletuserid).get();
 
-      // Accept multiple response shapes and extract numeric balance safely
-      if (result['success'] == true) {
-        // result may contain { 'balance': 123 } or { 'data': { 'balance': 123 } } or { 'balance': { 'balance': 123 } }
-        dynamic balanceCandidate;
-        if (result.containsKey('balance')) {
-          balanceCandidate = result['balance'];
-        } else if (result.containsKey('data')) {
-          balanceCandidate = result['data'];
-          if (balanceCandidate is Map &&
-              balanceCandidate.containsKey('balance')) {
-            balanceCandidate = balanceCandidate['balance'];
-          }
-        } else {
-          balanceCandidate = result;
-        }
-
-        // If it's a map containing balance key, extract it
-        if (balanceCandidate is Map &&
-            balanceCandidate.containsKey('balance')) {
-          balanceCandidate = balanceCandidate['balance'];
-        }
-
-        double parsedBalance = 0.0;
-        if (balanceCandidate is num) {
-          parsedBalance = balanceCandidate.toDouble();
-        } else if (balanceCandidate is String) {
-          parsedBalance = double.tryParse(balanceCandidate) ?? 0.0;
-        } else {
-          parsedBalance = 0.0;
-        }
-
-        print("User balance fetched successfully: $balanceCandidate");
-        _balance = parsedBalance;
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        final balance = (userData['balance'] ?? 0.0).toDouble();
+        print("User balance fetched successfully: $balance");
+        _balance = balance;
         notifyListeners();
       } else {
-        print("Failed to fetch user balance: ${result['message']}");
-        throw Exception("Failed to fetch user balance");
+        print("User document not found");
+        throw Exception("User profile not found");
       }
     } catch (e) {
       print("Error fetching user balance: $e");
-      throw Exception("Failed to fetch user balance");
+      rethrow;
     }
   }
-  // ...existing code...
 
   // Submit KYC
   Future<void> submitKYC(
-    // BuildContext context,
     String dob,
     String idNumber,
     XFile profileImage,
     XFile idCardImage,
   ) async {
     if (_walletuserid.isEmpty) {
-      // ScaffoldMessenger.of(
-      //   context,
-      // ).showSnackBar(SnackBar(content: Text("User not logged in!")));
       return;
     }
 
+    _setLoading(true);
+
     try {
-      var request = http.MultipartRequest(
-        "POST",
-        Uri.parse("$baseUrl/images/complete-registration/$_walletuserid"),
-      );
+      // TODO: Firebase Storage implementation coming soon
+      // This feature will enable KYC document uploads via Firebase Storage
+      // For now, we'll store the metadata only without document uploads
+      
+      // Update user document with KYC information (without file uploads)
+      await _firestore.collection('users').doc(_walletuserid).update({
+        'dateOfBirth': dob,
+        'governmentIdNumber': idNumber,
+        'kycStatus': 'pending',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
-      request.fields['dateOfBirth'] = dob;
-      request.fields['governmentIdNumber'] = idNumber;
+      // Update KYC document with metadata only
+      await _firestore.collection('kyc').doc(_walletuserid).set({
+        'status': 'pending',
+        'dateOfBirth': dob,
+        'governmentIdNumber': idNumber,
+        'submittedAt': FieldValue.serverTimestamp(),
+        'approvedAt': null,
+        'rejectionReason': null,
+        'note': 'Document uploads will be available when Firebase Storage is enabled',
+      }, SetOptions(merge: true));
 
-      // Add token to headers if available
-      if (_token != null) {
-        request.headers['Authorization'] = 'Bearer $_token';
-      }
+      _kycStatus = "pending";
+      _dob = dob;
+      _citizenidno = idNumber;
+      notifyListeners();
 
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'profilePhoto',
-          profileImage.path,
-          contentType: MediaType('image', 'jpeg'),
-        ),
-      );
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'governmentIdImage',
-          idCardImage.path,
-          contentType: MediaType('image', 'jpeg'),
-        ),
-      );
+      print("KYC submitted successfully! (Document uploads coming soon)");
 
-      var response = await request.send();
-      var responseBody = await response.stream.bytesToString();
-
-      if (response.statusCode == 200) {
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(content: Text("KYC Submitted Successfully! ✅")),
-        // );
-        _kycStatus = "Submitted";
-        notifyListeners();
-
-        // Once kyc updated call fetch user info to get latest user data
-        await fetchUserInfo();
-
-        // Navigate to main navigation
-        // PersistentNavBarNavigator.pushNewScreen(
-        //   context,
-        //   screen: MainNavigation(),
-        //   pageTransitionAnimation: PageTransitionAnimation.cupertino,
-        //   withNavBar: true,
-        // );
-      } else {
-        String errorMessage =
-            jsonDecode(responseBody)['message'] ?? "KYC submission failed";
-        print(errorMessage);
-        // ScaffoldMessenger.of(
-        //   context,
-        // ).showSnackBar(SnackBar(content: Text(errorMessage)));
-      }
+      // Refresh user info
+      await fetchUserInfo();
     } catch (e) {
-      // ScaffoldMessenger.of(
-      //   context,
-      // ).showSnackBar(SnackBar(content: Text("Error submitting KYC: $e")));
+      print("Error submitting KYC: $e");
+      rethrow;
+    } finally {
+      _setLoading(false);
     }
   }
 
   // Logout User
   Future<void> logout() async {
     try {
-      // Call logout service
-      if (_token != null) {
-        await _authService.logout(token: _token);
-      }
+      await _firebaseAuth.signOut();
+      print("Firebase logout successful");
     } catch (e) {
-      print("Logout service error: $e");
+      print("Logout error: $e");
     }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove("wallet_id");
-    await prefs.remove("auth_token");
-    await prefs.setBool('isbiometricenabled', false);
 
     // Clear all state
     _walletuserid = "";
@@ -651,21 +646,13 @@ class AppProvider with ChangeNotifier {
     _balance = 0.00;
     _dob = "";
     _citizenidno = "";
-    _kycStatus = "Pending";
+    _kycStatus = "not_submitted";
     _transactions = [];
     _transactionPin = null;
-    _token = null;
     _transactionpin_backend = false;
+    _isBiometricEnabled = false;
 
-    print("SharedPreferences cleared");
-
-    // await Future.delayed(const Duration(seconds: 1), () {
-    //   PersistentNavBarNavigator.pushNewScreen(
-    //     context,
-    //     screen: LoginScreen(),
-    //     pageTransitionAnimation: PageTransitionAnimation.cupertino,
-    //     withNavBar: false,
-    //   );
-    // });
+    print("Provider state cleared");
+    notifyListeners();
   }
 }

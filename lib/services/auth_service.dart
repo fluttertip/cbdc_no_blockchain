@@ -1,44 +1,29 @@
-import '../utils/http_client.dart';
 
-class AuthService {
-  Future<Map<String, dynamic>> login(String email, String password) async {
-    final response = await HttpClient.post('/user/login', {
-      'email': email,
-      'password': password,
-      'type': 'user',
-    });
+// @Deprecated('Use FirebaseAuth through AppProvider instead')
+// class AuthService {
+//   @Deprecated('Use AppProvider.loginUser() instead')
+//   Future<Map<String, dynamic>> login(String email, String password) async {
+//     throw UnsupportedError(
+//       'AuthService is deprecated. Use AppProvider.loginUser() with Firebase Auth',
+//     );
+//   }
 
-    if (response['success'] == true) {
-      return {'success': true, 'data': response['data']};
-    } else {
-      return {'success': false, 'message': response['message']};
-    }
-  }
+//   @Deprecated('Use AppProvider.registerUser() instead')
+//   Future<Map<String, dynamic>> register(
+//     String name,
+//     String email,
+//     String password,
+//     String? phone,
+//   ) async {
+//     throw UnsupportedError(
+//       'AuthService is deprecated. Use AppProvider.registerUser() with Firebase Auth',
+//     );
+//   }
 
-  Future<Map<String, dynamic>> register(
-    String name,
-    String email,
-    String password,
-    String? phone,
-  ) async {
-    final payload = {'name': name, 'email': email, 'password': password};
-    if (phone != null) payload['phone'] = phone;
-
-    final response = await HttpClient.post('/user/register', payload);
-
-    if (response['success'] == true) {
-      return {'success': true, 'data': response['data']};
-    } else {
-      return {'success': false, 'message': response['message']};
-    }
-  }
-
-  Future<Map<String, dynamic>> logout({String? token}) async {
-    final response = await HttpClient.get('/user/logout', token: token);
-    if (response['success'] == true) {
-      return {'success': true};
-    } else {
-      return {'success': false, 'message': response['message']};
-    }
-  }
-}
+//   @Deprecated('Use AppProvider.logout() instead')
+//   Future<Map<String, dynamic>> logout({String? token}) async {
+//     throw UnsupportedError(
+//       'AuthService is deprecated. Use AppProvider.logout() with FirebaseAuth.signOut()',
+//     );
+//   }
+// }

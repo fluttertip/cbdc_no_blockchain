@@ -39,10 +39,8 @@ class ProfileScreen extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 60,
-          backgroundImage: NetworkImage(
-            "${user.baseurl}/images/profile/${user.walletuserid}",
-          ),
-          onBackgroundImageError: (_, __) => const Icon(Icons.person, size: 60),
+          backgroundColor: Colors.grey.shade300,
+          child: const Icon(Icons.person, size: 60, color: Colors.grey),
         ),
         const SizedBox(height: 10),
       ],
@@ -178,15 +176,19 @@ class ProfileScreen extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.shade400),
+        color: Colors.grey.shade200,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.network(
-          "${user.baseurl}/images/government-id/${user.walletuserid}",
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Image.network("https://via.placeholder.com/180");
-          },
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.image_not_supported, size: 50, color: Colors.grey.shade400),
+            const SizedBox(height: 10),
+            Text(
+              'Government ID (Coming Soon)',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ],
         ),
       ),
     );

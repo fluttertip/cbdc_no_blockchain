@@ -4,13 +4,15 @@ import 'package:provider/provider.dart';
 import 'provider/theme_provider.dart';
 import 'themes/app_theme.dart';
 import 'screens/auth/login_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
-
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-    // Lock app to portrait only
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+);
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -21,15 +23,7 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
-  //APK DOWNLOAD LINK
-  // static const String apkDownloadUrl = 'YOUR_APK_DOWNLOAD_LINK_HERE';
 
-  // Future<void> _downloadAPK() async {
-  //   final Uri url = Uri.parse(apkDownloadUrl);
-  //   if (await canLaunchUrl(url)) {
-  //     await launchUrl(url, mode: LaunchMode.externalApplication);
-  //   }
-  // }
 
   @override
   Widget build(BuildContext context) {

@@ -1,67 +1,40 @@
-import '../utils/http_client.dart';
 
-class TransactionService {
-  Future<Map<String, dynamic>> createTransaction({
-    required String senderId,
-    required String receiverId,
-    required double amount,
-    required String transactionType,
-    required String transactionPin,
-    String? description,
-    String? token,
-  }) async {
-    final payload = {
-      'senderId': senderId,
-      'receiverId': receiverId,
-      'amount': amount,
-      'transactionType': transactionType,
-      'description': description ?? '',
-      'transactionPin': transactionPin,
-    };
- // Debug: confirm payload contains transactionPin before sending
-    print("createTransaction payload: $payload");
+// import 'package:cloud_firestore/cloud_firestore.dart';
 
-    final response = await HttpClient.post(
-      '/transactions',
-      payload,
-      token: token,
-    );
-    if (response['success'] == true) {
-      return {'success': true, 'data': response['data']};
-    } else {
-      return {'success': false, 'message': response['message']};
-    }
-  }
+// @Deprecated('Use Cloud Firestore transactions through AppProvider instead')
+// class TransactionService {
+//   @Deprecated('Use AppProvider.sendMoney() instead')
+//   Future<Map<String, dynamic>> createTransaction({
+//     required String senderId,
+//     required String receiverId,
+//     required double amount,
+//     required String transactionType,
+//     required String transactionPin,
+//     String? description,
+//     String? token,
+//   }) async {
+//     throw UnsupportedError(
+//       'TransactionService is deprecated. Use AppProvider.sendMoney() with Firestore transactions',
+//     );
+//   }
 
-  // Get transactions for a user (by user id)
-  Future<Map<String, dynamic>> getTransactionsForUser(
-    String userId, {
-    String? token,
-  }) async {
-    final response = await HttpClient.get(
-      '/transactions/$userId',
-      token: token,
-    );
-    if (response['success'] == true) {
-      return {'success': true, 'data': response['data']};
-    } else {
-      return {'success': false, 'message': response['message']};
-    }
-  }
+//   @Deprecated('Use AppProvider.fetchTransactions() instead')
+//   Future<Map<String, dynamic>> getTransactionsForUser(
+//     String userId, {
+//     String? token,
+//   }) async {
+//     throw UnsupportedError(
+//       'TransactionService is deprecated. Use AppProvider.fetchTransactions() with Firestore queries',
+//     );
+//   }
 
-  // Get single transaction details
-  Future<Map<String, dynamic>> getTransactionDetails(
-    String transactionId, {
-    String? token,
-  }) async {
-    final response = await HttpClient.get(
-      '/transactions/getSingleTransaction/$transactionId',
-      token: token,
-    );
-    if (response['success'] == true) {
-      return {'success': true, 'data': response['data']};
-    } else {
-      return {'success': false, 'message': response['message']};
-    }
-  }
-}
+//   @Deprecated('Use Firestore queries through AppProvider instead')
+//   Future<Map<String, dynamic>> getTransactionDetails(
+//     String transactionId, {
+//     String? token,
+//   }) async {
+//     throw UnsupportedError(
+//       'TransactionService is deprecated. Use Cloud Firestore through AppProvider',
+//     );
+//   }
+// }
