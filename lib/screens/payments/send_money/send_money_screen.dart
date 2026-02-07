@@ -153,10 +153,8 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
 
                           final userProvider =
                               Provider.of<AppProvider>(context, listen: false);
-                          final pinStatus =
-                              await userProvider.getTransactionPinLabel();
 
-                          if (pinStatus == "Change Transaction PIN") {
+                          if (userProvider.transactionpin_backend) {
                             // Transaction PIN is already set ➝ proceed
                             PersistentNavBarNavigator.pushNewScreen(
                               context,
